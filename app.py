@@ -71,8 +71,7 @@ st.title("✍️ Multi-Digit Handwritten Recognition")
 def load_model():
     return tf.keras.models.load_model(
         "DigitClassifier.keras",
-        compile=False,
-        safe_mode=False
+        compile=False
     )
 
 model = load_model()
