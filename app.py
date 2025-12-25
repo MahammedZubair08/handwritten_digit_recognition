@@ -4,112 +4,180 @@ import tensorflow as tf
 from PIL import Image
 import cv2
 
+# ---------------- PAGE CONFIG ----------------
 st.set_page_config(
     page_title="Multi-Digit Recognizer",
     page_icon="✍️",
     layout="centered"
 )
 
+# ---------------- CUSTOM RESPONSIVE CSS ----------------
+st.markdown("""
+<style>
+
+/* Main container */
+.main {
+    padding: 1rem;
+}
+
+/* Title */
+h1 {
+    text-align: center;
+    font-size: 2.2rem;
+}
+
+/* Uploaded & processed images */
+.responsive-img img {
+    width: 100%;
+    max-width: 420px;
+    height: auto;
+    display: block;
+    margin: auto;
+}
+
+/* Predict button */
+.stButton>button {
+    width: 100%;
+    font-size: 1.1rem;
+    padding: 0.6rem;
+}
+
+/* Digit card */
+.digit-card {
+    text-align: center;
+    padding: 0.5rem;
+    border-radius: 10px;
+    background-color: #f7f7f7;
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+    h1 {
+        font-size: 1.7rem;
+    }
+    .digit-card {
+        margin-bottom: 0.7rem;
+    }
+}
+
+</style>
+""", unsafe_allow_html=True)
+
+# ---------------- TITLE ----------------
 st.title("✍️ Multi-Digit Handwritten Recognition")
 
-# Load model once
+# ---------------- LOAD MODEL ----------------
 @st.cache_resource
 def load_model():
-    # Note: Ensure "digit_model.h5" is in the same directory
-    return tf.keras.models.load_model("digit_model.keras")
+    return tf.keras.models.load_model("digit_model.h5")
 
 model = load_model()
 
-# Sidebar instructions
+# ---------------- SIDEBAR ----------------
 st.sidebar.title("ℹ️ Instructions")
 st.sidebar.markdown("""
-- Upload an image of handwritten digits.
-- The app uses **Otsu's Binarization** to handle lighting.
-- Results are sorted from **left to right**.
+- Upload an image of handwritten digits  
+- Uses **Otsu’s Thresholding**  
+- Digits are read **left → right**
 """)
 
 show_debug = st.sidebar.checkbox("Show Debug Processing", value=False)
 
-# Upload image
-uploaded_file = st.file_uploader("Upload an image (PNG/JPG)", type=["png", "jpg", "jpeg"])
+# ---------------- UPLOAD ----------------
+uploaded_file = st.file_uploader(
+    "Upload an image (PNG / JPG)",
+    type=["png", "jpg", "jpeg"]
+)
 
-if uploaded_file is not None:
+if uploaded_file:
     img = Image.open(uploaded_file).convert("L")
     img_np = np.array(img)
-    st.image(img_np, caption="Uploaded Image", width=400)
 
-    if st.button("Predict"):
-        # 1. PREPROCESSING: Reduce grain and invert
-        img_inv = 255 - img_np
+    st.markdown('<div class="responsive-img">', unsafe_allow_html=True)
+    st.image(img_np, caption="Uploaded Image")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    if st.button("🔍 Predict Digits"):
+     
+
+        # -------- PREPROCESSING --------
+        img_inv = 255 - img_np   
         img_blur = cv2.GaussianBlur(img_inv, (5, 5), 0)
 
-        # 2. AUTO-THRESHOLD: Otsu's method automatically finds the best cut-off
-        _, img_bin = cv2.threshold(img_blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        _, img_bin = cv2.threshold(
+            img_blur, 0, 255,
+            cv2.THRESH_BINARY+cv2.THRESH_OTSU
+        )
 
-        # 3. CLEANING: Dilation closes small gaps in pen strokes
         kernel = np.ones((3, 3), np.uint8)
         img_bin = cv2.dilate(img_bin, kernel, iterations=1)
 
         if show_debug:
-            st.image(img_bin, caption="Processed Binary Image (What the AI sees)", width=400)
+            st.markdown('<div class="responsive-img">', unsafe_allow_html=True)
+            st.image(img_bin, caption="Processed Image")
+            st.markdown('</div>', unsafe_allow_html=True)
 
-        # 4. CONTOUR DETECTION
+        # -------- CONTOURS --------
         contours, _ = cv2.findContours(
-            img_bin.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+            img_bin.astype(np.uint8),
+            cv2.RETR_EXTERNAL,
+            cv2.CHAIN_APPROX_SIMPLE
         )
 
-        # 5. FILTERING: Ignore tiny noise
-        digit_boxes = []
-        # Dynamic threshold: ignores objects smaller than 0.1% of the image
-        min_area_threshold = (img_np.shape[0] * img_np.shape[1]) * 0.001 
-        
-        for c in contours:
-            if cv2.contourArea(c) > min_area_threshold:
-                x, y, w, h = cv2.boundingRect(c)
-                digit_boxes.append((x, y, w, h))
+        min_area = img_np.shape[0] * img_np.shape[1] * 0.001
+        boxes = []
 
-        if not digit_boxes:
-            st.warning("⚠️ No digits detected. Ensure high contrast.")
+        for c in contours:
+            if cv2.contourArea(c) > min_area:
+                boxes.append(cv2.boundingRect(c))
+
+        if not boxes:
+            st.warning("No digits detected. Use high contrast.")
             st.stop()
 
-        # Sort digits left-to-right
-        digit_boxes = sorted(digit_boxes, key=lambda b: b[0])
+        boxes = sorted(boxes, key=lambda b: b[0])
 
         predicted_digits = []
-        cols = st.columns(len(digit_boxes)) # Create columns for each digit display
 
-        for i, (x, y, w, h) in enumerate(digit_boxes):
-            # Extract and Pad
+        # -------- RESPONSIVE DIGIT GRID --------
+        is_mobile = len(boxes) <= 2
+        cols = st.columns(1 if is_mobile else min(len(boxes), 6))
+
+        for i, (x, y, w, h) in enumerate(boxes):
+
             digit_img = img_bin[y:y+h, x:x+w]
             digit_img = cv2.copyMakeBorder(
                 digit_img, 15, 15, 15, 15,
                 cv2.BORDER_CONSTANT, value=0
             )
 
-            # Centering logic
-            h_pad, w_pad = digit_img.shape
-            y_coords, x_coords = np.where(digit_img > 0)
-            if len(y_coords) > 0:
-                cy, cx = np.mean(y_coords), np.mean(x_coords)
-                shift_x = w_pad//2 - int(cx)
-                shift_y = h_pad//2 - int(cy)
-                M = np.float32([[1, 0, shift_x], [0, 1, shift_y]])
-                digit_img = cv2.warpAffine(digit_img, M, (w_pad, h_pad))
+            ys, xs = np.where(digit_img > 0)
+            if len(xs) > 0:
+                cx, cy = xs.mean(), ys.mean()
+                M = np.float32([
+                    [1, 0, digit_img.shape[1]//2 - cx],
+                    [0, 1, digit_img.shape[0]//2 - cy]
+                ])
+                digit_img = cv2.warpAffine(
+                    digit_img, M,
+                    (digit_img.shape[1], digit_img.shape[0])
+                )
 
-            # Resize & Predict
-            digit_resized = cv2.resize(digit_img, (28, 28), interpolation=cv2.INTER_AREA)
+            digit_resized = cv2.resize(digit_img, (28, 28))
             img_norm = digit_resized / 255.0
             img_norm = img_norm.reshape(1, 28, 28, 1)
 
-            prediction = model.predict(img_norm)
-            digit = np.argmax(prediction)
-            confidence = np.max(prediction) * 100
+            pred = model.predict(img_norm, verbose=0)
+            digit = np.argmax(pred)
+            conf = np.max(pred) * 100
             predicted_digits.append(str(digit))
 
-            with cols[i]:
-                st.image(digit_resized, caption=f"ID:{i+1}", width=60)
-                st.caption(f"**{digit}** ({confidence:.0f}%)")
+            with cols[i % len(cols)]:
+                st.markdown('<div class="digit-card">', unsafe_allow_html=True)
+                st.image(digit_resized, width=80)
+                st.markdown(f"**{digit}** ({conf:.0f}%)")
+                st.markdown('</div>', unsafe_allow_html=True)
 
-        # Result display
-        final_number = ''.join(predicted_digits)
+        # -------- FINAL RESULT --------
+        final_number = "".join(predicted_digits)
         st.success(f"### Predicted Number: {final_number}")
