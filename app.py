@@ -70,7 +70,7 @@ st.title("✍️ Multi-Digit Handwritten Recognition")
 @st.cache_resource
 def load_model():
     return tf.keras.models.load_model(
-        "digit_model.keras",
+        "digit_models.keras",
         compile=False,
         safe_mode=False
     )
