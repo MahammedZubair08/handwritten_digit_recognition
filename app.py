@@ -82,7 +82,9 @@ st.sidebar.markdown("""
 - Upload an image of handwritten digits  
 - Uses **Otsu’s Thresholding**  
 - Digits are read **left → right**
+- Crop input to digits only (see Example Input Image)  
 """)
+st.image("images.jpeg", caption="Example Input Image")
 
 show_debug = st.sidebar.checkbox("Show Debug Processing", value=False)
 
