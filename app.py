@@ -86,6 +86,20 @@ st.sidebar.markdown("""
 """)
 st.image("images.jpeg", caption="Example Input Image")
 
+# ---------------- DARK MODE TOGGLE ----------------
+dark_mode = st.sidebar.checkbox("Enable Dark Mode", value=False)
+if dark_mode:
+    st.markdown("""
+    <style>
+    [data-testid="stAppViewContainer"] { background-color: #0b0f15 !important; color: #e6edf3 !important; }
+    .block-container { background-color: #0b0f15 !important; color: #e6edf3 !important; }
+    .stButton>button { background-color: #1f2937 !important; color: #e6edf3 !important; border: none !important; }
+    .digit-card { background-color: #111318 !important; color: #e6edf3 !important; }
+    h1 { color: #e6edf3 !important; }
+    .responsive-img img { filter: brightness(0.95) contrast(1.05) !important; }
+    </style>
+    """, unsafe_allow_html=True)
+
 show_debug = st.sidebar.checkbox("Show Debug Processing", value=False)
 
 # ---------------- UPLOAD ----------------
